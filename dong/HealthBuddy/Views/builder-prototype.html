@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Builder — 高保真原型</title>
+<style>
+/* ─────────────────────────── Base ─────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  min-height: 100vh;
+  background: linear-gradient(140deg, #D6CBF5 0%, #C6DEF7 45%, #C9EDDC 100%);
+  font-family: -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 32px 20px 60px;
+  gap: 20px;
+}
+
+/* ─────────────────────── Sidebar Nav ─────────────────────── */
+.sidebar {
+  position: sticky;
+  top: 32px;
+  width: 130px;
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(14px);
+  border-radius: 18px;
+  padding: 14px 8px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.sidebar-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #B0AABF;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 6px 10px 4px;
+}
+.nav-btn {
+  padding: 7px 10px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  color: #5A5570;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nav-btn:hover { background: #F0EBFF; color: #6B5CE7; }
+.nav-btn.active { background: #6B5CE7; color: #fff; font-weight: 600; }
+.nav-sep { height: 1px; background: #EDE9F8; margin: 6px 8px; }
+
+/* ─────────────────────── Phone Frame ──────────────────────── */
+.phone-wrap { position: relative; }
+.phone {
+  width: 393px;
+  height: 852px;
+  background: #F7F5F2;
+  border-radius: 54px;
+  overflow: hidden;
+  position: relative;
+  box-shadow:
+    0 0 0 1.5px #D0CCC8,
+    0 0 0 3px #B0ACA8,
+    0 36px 90px rgba(0,0,0,0.32),
+    inset 0 0 0 1px rgba(255,255,255,0.7);
+}
+/* Dynamic Island */
+.phone::before {
+  content: '';
+  position: absolute;
+  top: 12px; left: 50%;
+  transform: translateX(-50%);
+  width: 110px; height: 33px;
+  background: #1A1A1A;
+  border-radius: 20px;
+  z-index: 200;
+}
+
+/* ─────────────────────────── Screen ─────────────────────── */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.screen.active { display: flex; }
+
+/* Status Bar */
+.sbar {
+  height: 54px;
+  padding: 18px 24px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 50;
+}
+.sbar-time { font-size: 15px; font-weight: 600; }
+.sbar-icons { font-size: 13px; display: flex; gap: 5px; }
+
+/* Bottom Nav */
+.bnav {
+  height: 82px;
+  padding: 10px 0 22px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(0,0,0,0.06);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  flex-shrink: 0;
+}
+.bnav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 14px;
+  transition: all 0.18s;
+}
+.bnav-icon { font-size: 23px; opacity: 0.35; transition: opacity 0.18s; }
+.bnav-item.on .bnav-icon { opacity: 1; }
+.bnav-lbl { font-size: 10.5px; color: #9A95A8; font-weight: 500; }
+.bnav-item.on .bnav-lbl { color: #6B5CE7; font-weight: 700; }
+
+/* Scroll wrapper */
+.sc { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+.sc::-webkit-scrollbar { display: none; }
+
+/* Reusable Buttons */
+.btn {
+  width: 100%;
+  height: 56px;
+  border: none;
+  border-radius: 18px;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.15s, box-shadow 0.15s;
+  letter-spacing: 0.2px;
+}
+.btn:active { transform: scale(0.97); }
+.btn-p { background: linear-gradient(135deg, #B99FE8 0%, #7CC4E8 100%); color: #fff; box-shadow: 0 8px 22px rgba(185,159,232,0.38); }
+.btn-g { background: linear-gradient(135deg, #6BC98F 0%, #4ABCB0 100%); color: #fff; box-shadow: 0 8px 22px rgba(107,201,143,0.35); }
+.btn-ghost { background: transparent; color: #9A95A8; font-size: 15px; height: 48px; }
+
+/* Page Header */
+.ph {
+  padding: 10px 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.back {
+  width: 38px; height: 38px;
+  background: #fff;
+  border-radius: 13px;
+  border: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  flex-shrink: 0;
+}
+.ph-title { font-size: 19px; font-weight: 700; color: #1E1B2E; }
+
+/* Cards */
+.card {
+  background: #fff;
+  border-radius: 22px;
+  box-shadow: 0 3px 18px rgba(0,0,0,0.06);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN 0 — Welcome
+══════════════════════════════════════════════════════════════ */
+#s-welcome { background: linear-gradient(180deg, #FBF6EC 0%, #EEE8FA 55%, #E4F3FC 100%); }
+.welcome-inner {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 20px 32px 0;
+}
+.app-badge {
+  width: 84px; height: 84px;
+  background: linear-gradient(135deg, #B99FE8, #7CC4E8);
+  border-radius: 26px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 44px;
+  box-shadow: 0 10px 30px rgba(185,159,232,0.38);
+  margin-bottom: 22px;
+}
+.app-name { font-size: 40px; font-weight: 800; color: #1E1B2E; letter-spacing: -1.5px; }
+.app-sub { font-size: 13px; color: #B99FE8; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; margin: 4px 0 28px; }
+.welcome-bear {
+  font-size: 130px;
+  animation: breathe 3.5s ease-in-out infinite;
+  margin-bottom: 28px;
+  cursor: pointer;
+}
+.welcome-tagline { font-size: 16px; color: #5A5570; text-align: center; line-height: 1.7; max-width: 260px; }
+.welcome-dots { display: flex; gap: 8px; margin-top: 28px; }
+.wd { width: 8px; height: 8px; border-radius: 4px; background: #B99FE8; opacity: 0.35; }
+.wd.active { width: 24px; border-radius: 4px; opacity: 1; }
+.welcome-foot { padding: 24px 28px 48px; }
+
+/* ══════════════════════════════════════════════════════════════
+   SCREENS 1-3 — Permissions
+══════════════════════════════════════════════════════════════ */
+.perm-screen { background: linear-gradient(180deg, #F3EEFF 0%, #F7F5F2 100%); }
+.perm-step-bar { padding: 12px 32px 0; }
+.perm-dots { display: flex; gap: 8px; justify-content: center; }
+.pd { width: 8px; height: 8px; border-radius: 4px; background: #DDD8F8; transition: all 0.3s; }
+.pd.on { width: 26px; background: #B99FE8; }
+.perm-body {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 16px 36px 0;
+}
+.perm-illo { font-size: 96px; margin-bottom: 28px; animation: breathe 3s ease-in-out infinite; }
+.perm-title { font-size: 26px; font-weight: 800; color: #1E1B2E; text-align: center; margin-bottom: 14px; }
+.perm-desc { font-size: 14.5px; color: #6A6480; text-align: center; line-height: 1.75; }
+.perm-note {
+  margin-top: 18px;
+  background: rgba(107,201,143,0.12);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: #4A9E6E;
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+}
+.perm-foot { padding: 24px 28px 46px; display: flex; flex-direction: column; gap: 10px; }
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN 4 — Create Partner
+══════════════════════════════════════════════════════════════ */
+#s-create { background: linear-gradient(180deg, #FDF7EE 0%, #F7F5F2 100%); }
+.create-bear-preview {
+  font-size: 110px;
+  text-align: center;
+  padding: 20px 0 8px;
+  animation: breathe 3s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.create-body { flex: 1; padding: 0 24px; }
+.sec-lbl { font-size: 11.5px; font-weight: 700; color: #9A95A8; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 10px; }
+.inp {
+  width: 100%;
+  height: 54px;
+  background: #fff;
+  border: 2px solid #EAE6E0;
+  border-radius: 16px;
+  padding: 0 18px;
+  font-size: 17px;
+  color: #1E1B2E;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+  margin-bottom: 28px;
+}
+.inp:focus { border-color: #B99FE8; }
+.skin-row { display: flex; gap: 12px; margin-bottom: 28px; }
+.skin-opt {
+  flex: 1;
+  height: 88px;
+  background: #fff;
+  border: 2.5px solid #EAE6E0;
+  border-radius: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 42px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.skin-opt.on {
+  border-color: #B99FE8;
+  background: #F5EFFF;
+  box-shadow: 0 4px 18px rgba(185,159,232,0.28);
+  transform: scale(1.04);
+}
+.create-foot { padding: 16px 24px 48px; }
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN 5 — Home
+══════════════════════════════════════════════════════════════ */
+#s-home { background: linear-gradient(180deg, #E5F2FF 0%, #F0EAFF 45%, #FDF7EE 100%); }
+.home-topbar {
+  padding: 6px 22px 0;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.loc-pill, .wx-pill {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  color: #5A5570;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+.bear-stage {
+  flex: 1; min-height: 230px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  position: relative;
+}
+.bear-glow {
+  position: absolute;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(107,201,143,0.28) 0%, transparent 70%);
+  animation: glow-pulse 3.5s ease-in-out infinite;
+}
+.bear-main {
+  font-size: 124px;
+  cursor: pointer;
+  animation: breathe 4s ease-in-out infinite;
+  position: relative; z-index: 2;
+  user-select: none;
+}
+.bear-mood-badge {
+  position: absolute;
+  bottom: 22px;
+  background: rgba(255,255,255,0.9);
+  backdrop-filter: blur(8px);
+  border-radius: 14px;
+  padding: 5px 12px;
+  font-size: 12px; color: #5A5570;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  z-index: 3;
+}
+.dialog-bubble {
+  position: absolute;
+  top: 8px; right: 16px;
+  background: #fff;
+  border-radius: 16px 16px 16px 4px;
+  padding: 11px 15px;
+  font-size: 13px; color: #1E1B2E;
+  max-width: 170px;
+  line-height: 1.55;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.1);
+  display: none;
+  z-index: 10;
+  animation: pop-in 0.25s ease;
+}
+.dialog-cta { font-size: 11px; color: #B99FE8; font-weight: 600; margin-top: 6px; }
+
+/* Energy Card */
+.energy-wrap { padding: 0 20px 14px; flex-shrink: 0; }
+.energy-card { padding: 17px 20px; }
+.energy-row1 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 11px; }
+.energy-lbl { font-size: 13px; color: #9A95A8; font-weight: 500; }
+.energy-num { font-size: 22px; font-weight: 800; color: #1E1B2E; font-variant-numeric: tabular-nums; }
+.energy-num span { font-size: 13px; color: #9A95A8; font-weight: 400; }
+.ebar-track { height: 13px; background: #F0ECE8; border-radius: 8px; overflow: hidden; margin-bottom: 9px; position: relative; }
+.ebar-fill {
+  height: 100%; border-radius: 8px;
+  background: linear-gradient(90deg, #6BC98F 0%, #A8E8C0 100%);
+  transition: width 1.2s cubic-bezier(0.34,1.56,0.64,1);
+  position: relative;
+}
+.ebar-shine {
+  position: absolute; right: 0; top: 0;
+  width: 28px; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55));
+  animation: shine-slide 2.2s ease-in-out infinite;
+}
+.energy-feedback { font-size: 12.5px; color: #6A6480; font-style: italic; }
+
+/* Daily Actions */
+.actions-wrap { padding: 0 20px 14px; flex-shrink: 0; }
+.section-head { font-size: 16px; font-weight: 700; color: #1E1B2E; margin-bottom: 11px; }
+.act-cards { display: flex; flex-direction: column; gap: 10px; }
+.act-card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 13px 15px;
+  display: flex; align-items: center; gap: 13px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.act-card:active { transform: scale(0.98); }
+.act-ico-wrap {
+  width: 46px; height: 46px;
+  border-radius: 15px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 23px; flex-shrink: 0;
+}
+.ico-green { background: #EAFAF1; }
+.ico-blue  { background: #EAF2FF; }
+.ico-orange { background: #FFF4EB; }
+.act-info { flex: 1; min-width: 0; }
+.act-name { font-size: 14px; font-weight: 600; color: #1E1B2E; margin-bottom: 5px; }
+.pbar-track { height: 5px; background: #F0ECE8; border-radius: 3px; overflow: hidden; }
+.pbar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #6BC98F, #A8E8C0); }
+.act-sub { font-size: 11.5px; color: #9A95A8; margin-top: 3px; }
+.act-end {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 2px solid #E8E4F2;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
+  font-weight: 600;
+}
+.act-end.done { background: #6BC98F; border-color: #6BC98F; color: #fff; font-size: 14px; }
+.act-end.cta { background: #FFF4EB; border-color: #F5C842; color: #D4962A; font-size: 13px; }
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN 6 — Camera
+══════════════════════════════════════════════════════════════ */
+#s-food1 { background: #111222; }
+.cam-vf {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  background: radial-gradient(ellipse at center, #1E2040 0%, #0D0E1A 100%);
+}
+.cam-frame {
+  width: 270px; height: 270px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 26px;
+  position: relative;
+}
+.cc { position: absolute; width: 26px; height: 26px; border-style: solid; border-color: white; }
+.cc-tl { top: -2px; left: -2px; border-width: 3px 0 0 3px; border-radius: 8px 0 0 0; }
+.cc-tr { top: -2px; right: -2px; border-width: 3px 3px 0 0; border-radius: 0 8px 0 0; }
+.cc-bl { bottom: -2px; left: -2px; border-width: 0 0 3px 3px; border-radius: 0 0 0 8px; }
+.cc-br { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; border-radius: 0 0 8px 0; }
+.cam-hint-bear { position: absolute; bottom: 28px; text-align: center; width: 100%; color: rgba(255,255,255,0.55); font-size: 13px; }
+.cam-scan-line {
+  position: absolute;
+  width: 100%; height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(107,201,143,0.8), transparent);
+  animation: scan 2.5s ease-in-out infinite;
+}
+.cam-ctrls {
+  padding: 20px 24px 48px;
+  display: flex; align-items: center; justify-content: center; gap: 28px;
+}
+.cam-btn-cap {
+  width: 76px; height: 76px;
+  background: rgba(255,255,255,0.95);
+  border: 4px solid rgba(255,255,255,0.5);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; cursor: pointer;
+  box-shadow: 0 4px 24px rgba(255,255,255,0.18);
+  transition: transform 0.12s;
+}
+.cam-btn-cap:active { transform: scale(0.93); }
+.cam-btn-side {
+  width: 56px; height: 56px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; cursor: pointer;
+}
+.cam-top-bar {
+  padding: 8px 20px 0;
+  display: flex; align-items: center; gap: 14px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN 7 — Food Loading
+══════════════════════════════════════════════════════════════ */
+#s-food2 { background: linear-gradient(180deg, #FDF6EC 0%, #F3EEFF 100%); }
+.load-body {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 40px 32px;
+}
+.load-bear { font-size: 90px; animation: bounce 1s ease-in-out infinite; }
+.load-title { font-size: 23px; font-weight: 800; color: #1E1B2E; margin: 22px 0 8px; }
+.load-sub { font-size: 14px; color: #9A95A8; }
+.load-dots { display: flex; gap: 9px; margin-top: 22px; }
+.ld { width: 11px; height: 11px; border-radius: 50%; background: #B99FE8; animation: ldot 1.4s ease-in-out infinite; }
+.ld:nth-child(2) { animation-delay: 0.22s; }
+.ld:nth-child(3) { animation-delay: 0.44s; }
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN 8 — Food Results
+══════════════════════════════════════════════════════════════ */
+#s-food3 { background: #F7F5F2; }
+.food-hero {
+  height: 200px;
+  background: linear-gradient(135deg, #FFD67A, #FF9F5A);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 80px;
+  flex-shrink: 0; position: relative;
+}
+.food-hero-back {
+  position: absolute; top: 56px; left: 18px;
+  width: 38px; height: 38px;
+  background: rgba(255,255,255,0.28);
+  border-radius: 12px;
+  border: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; cursor: pointer; color: #fff;
+}
+.result-sheet {
+  flex: 1;
+  background: #fff;
+  border-radius: 28px 28px 0 0;
+  margin-top: -26px;
+  padding: 22px 22px 0;
+  overflow-y: auto;
+}
+.rs-title { font-size: 21px; font-weight: 800; color: #1E1B2E; margin-bottom: 3px; }
+.rs-sub { font-size: 13.5px; color: #9A95A8; margin-bottom: 18px; }
+.food-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 13px 0;
+  border-bottom: 1px solid #F5F1EC;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.food-item.selected { background: #F5EFFF; margin: 0 -8px; padding: 13px 8px; border-radius: 14px; border-bottom: none; }
+.fi-emoji { font-size: 38px; flex-shrink: 0; }
+.fi-info { flex: 1; }
+.fi-name { font-size: 15px; font-weight: 600; color: #1E1B2E; }
+.fi-cal { font-size: 12.5px; color: #9A95A8; margin-top: 2px; }
+.fi-stars { display: flex; gap: 2px; }
+.star { font-size: 13px; }
+.star.f { color: #F5C842; }
+.star.e { color: #E0DBD5; }
+.food-actions { padding: 16px 0 28px; display: flex; flex-direction: column; gap: 10px; }
+.food-manual { text-align: center; font-size: 13px; color: #B99FE8; cursor: pointer; padding: 8px; }
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN 9 — Feed Result
+══════════════════════════════════════════════════════════════ */
+#s-food4 { background: linear-gradient(180deg, #E5FFF1 0%, #F3EEFF 100%); }
+.feed-result {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 32px 28px;
+}
+.feed-bear { font-size: 120px; animation: happy-jump 0.6s ease; }
+.energy-badge {
+  background: #fff;
+  border-radius: 22px;
+  padding: 18px 36px;
+  text-align: center;
+  margin: 22px 0;
+  box-shadow: 0 4px 22px rgba(0,0,0,0.07);
+}
+.eb-plus { font-size: 38px; font-weight: 800; color: #6BC98F; }
+.eb-lbl { font-size: 13px; color: #9A95A8; margin-top: 4px; }
+.feed-quote { font-size: 17px; color: #1E1B2E; text-align: center; line-height: 1.65; font-weight: 500; }
+.mini-ebar {
+  background: #fff;
+  border-radius: 18px;
+  padding: 14px 18px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  width: 100%; margin-top: 22px;
+}
+.me-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 9px; }
+.me-lbl { color: #9A95A8; }
+.me-val { font-weight: 700; color: #1E1B2E; }
+.me-track { height: 10px; background: #F0ECE8; border-radius: 6px; overflow: hidden; }
+.me-fill { height: 100%; background: linear-gradient(90deg, #6BC98F, #A8E8C0); border-radius: 6px; }
+.feed-foot { padding: 0 24px 48px; }
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN 10 — Decoration Shop
+══════════════════════════════════════════════════════════════ */
+#s-deco { background: #F7F5F2; }
+.deco-header {
+  background: #fff;
+  padding: 12px 20px 16px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+.deco-preview-row { display: flex; align-items: center; gap: 16px; margin-top: 14px; }
+.dp-bear { position: relative; font-size: 58px; }
+.dp-hat { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 28px; }
+.dp-info .dp-name { font-size: 15px; font-weight: 700; color: #1E1B2E; }
+.dp-info .dp-sub { font-size: 12.5px; color: #9A95A8; margin-top: 2px; }
+.dp-change { font-size: 12px; color: #B99FE8; font-weight: 600; cursor: pointer; margin-top: 5px; }
+.deco-tabs {
+  background: #fff;
+  border-bottom: 1px solid #F0ECE8;
+  display: flex; gap: 0; padding: 0 16px;
+  overflow-x: auto; flex-shrink: 0;
+}
+.deco-tabs::-webkit-scrollbar { display: none; }
+.dtab {
+  flex-shrink: 0; padding: 12px 16px;
+  font-size: 13.5px; font-weight: 500;
+  color: #9A95A8; cursor: pointer;
+  border-bottom: 2.5px solid transparent;
+  transition: all 0.2s;
+}
+.dtab.on { color: #6B5CE7; font-weight: 700; border-bottom-color: #6B5CE7; }
+.deco-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 16px;
+}
+.deco-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 16px 10px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 7px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  transition: all 0.2s;
+  position: relative;
+  border: 2px solid transparent;
+}
+.deco-card.on { border-color: #B99FE8; background: #F5EFFF; box-shadow: 0 4px 18px rgba(185,159,232,0.22); }
+.deco-card.locked { opacity: 0.72; }
+.dco-emo { font-size: 32px; }
+.dco-name { font-size: 12px; font-weight: 500; color: #1E1B2E; text-align: center; }
+.dco-status { font-size: 11px; color: #9A95A8; }
+.dco-status.wearing { color: #B99FE8; font-weight: 700; }
+.dco-lock { position: absolute; top: 8px; right: 9px; font-size: 13px; opacity: 0.55; }
+.dco-lock-cond { font-size: 10.5px; color: #B0AAC0; text-align: center; }
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN 11 — Map
+══════════════════════════════════════════════════════════════ */
+#s-map { background: #F7F5F2; }
+.map-head { padding: 14px 22px 4px; flex-shrink: 0; }
+.map-title { font-size: 26px; font-weight: 800; color: #1E1B2E; }
+.map-sub { font-size: 13.5px; color: #9A95A8; margin-top: 3px; }
+.map-cards { padding: 12px 20px; display: flex; flex-direction: column; gap: 14px; }
+.map-card {
+  border-radius: 24px; overflow: hidden;
+  position: relative; height: 172px;
+  cursor: pointer;
+  box-shadow: 0 6px 26px rgba(0,0,0,0.12);
+  transition: transform 0.18s;
+}
+.map-card:active { transform: scale(0.98); }
+.mc-bg {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 70px; letter-spacing: 4px;
+}
+.mc-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 25%, rgba(0,0,0,0.62) 100%);
+}
+.mc-badge {
+  position: absolute; top: 12px; right: 14px;
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.28);
+  border-radius: 12px;
+  padding: 4px 11px;
+  font-size: 12px; color: #fff; font-weight: 500;
+}
+.mc-badge.curr { background: rgba(107,201,143,0.75); border-color: transparent; }
+.mc-content {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 14px 18px;
+  color: #fff;
+}
+.mc-name { font-size: 19px; font-weight: 700; }
+.mc-desc { font-size: 12.5px; opacity: 0.85; margin-top: 2px; }
+.mc-progress {
+  margin-top: 8px;
+  height: 4px;
+  background: rgba(255,255,255,0.25);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.mc-progress-fill { height: 100%; border-radius: 3px; background: #6BC98F; }
+.mc-locked-overlay {
+  position: absolute; inset: 0;
+  background: rgba(20,18,35,0.52);
+  backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 6px; color: #fff;
+  font-size: 14px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN 12 — Today's Status
+══════════════════════════════════════════════════════════════ */
+#s-status { background: linear-gradient(180deg, #F3EEFF 0%, #F7F5F2 100%); }
+.stat-head { padding: 12px 22px 14px; flex-shrink: 0; }
+.stat-title { font-size: 26px; font-weight: 800; color: #1E1B2E; }
+.stat-date { font-size: 13px; color: #9A95A8; margin-top: 3px; }
+.rings-card { margin: 0 20px 14px; padding: 22px 18px; }
+.rings-row { display: flex; justify-content: space-around; }
+.ring-item { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+.ring-wrap { position: relative; width: 68px; height: 68px; }
+.ring-lbl { font-size: 12px; color: #9A95A8; font-weight: 500; }
+.ring-val { font-size: 14px; font-weight: 800; }
+.bear-msg {
+  margin: 0 20px 14px;
+  background: linear-gradient(135deg, #F3EEFF, #E8F4FF);
+  border-radius: 20px;
+  padding: 16px 18px;
+  display: flex; gap: 13px; align-items: flex-start;
+}
+.bm-icon { font-size: 38px; flex-shrink: 0; }
+.bm-text { flex: 1; font-size: 13.5px; color: #1E1B2E; line-height: 1.6; }
+.bm-bold { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.sugg-title { font-size: 15px; font-weight: 700; color: #1E1B2E; padding: 0 22px 10px; }
+.sugg-cards { padding: 0 20px; display: flex; flex-direction: column; gap: 10px; }
+.sugg-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 13px 15px;
+  display: flex; align-items: center; gap: 13px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+.sugg-ico { font-size: 28px; }
+.sugg-txt { flex: 1; font-size: 13.5px; color: #1E1B2E; line-height: 1.5; }
+.sugg-reward { font-size: 13px; font-weight: 700; color: #6BC98F; white-space: nowrap; }
+.streak-card { margin: 14px 20px; background: #fff; border-radius: 20px; padding: 16px 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+.str-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.str-lbl { font-size: 14px; font-weight: 600; color: #1E1B2E; }
+.str-num { font-size: 22px; font-weight: 800; color: #F5C842; }
+.str-dots { display: flex; gap: 6px; }
+.sdot {
+  width: 34px; height: 34px;
+  border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600;
+}
+.sdot.done { background: #F5C842; color: #fff; }
+.sdot.today { background: #6BC98F; color: #fff; }
+.sdot.empty { background: #F0ECE8; }
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN 13 — Profile / My
+══════════════════════════════════════════════════════════════ */
+#s-profile { background: #F7F5F2; }
+.profile-hero {
+  background: linear-gradient(135deg, #B99FE8 0%, #7CC4E8 100%);
+  padding: 56px 22px 44px;
+  display: flex; align-items: center; gap: 16px;
+  flex-shrink: 0;
+}
+.p-avatar {
+  width: 66px; height: 66px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.28);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 38px; flex-shrink: 0;
+}
+.p-name { font-size: 22px; font-weight: 800; color: #fff; }
+.p-days { font-size: 13px; color: rgba(255,255,255,0.78); margin-top: 2px; }
+.bear-stat-card {
+  margin: -22px 20px 20px;
+  padding: 16px;
+  display: flex; align-items: center; gap: 14px;
+  position: relative;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.1);
+}
+.bs-bear { position: relative; display: inline-block; flex-shrink: 0; }
+.bs-bear-emo { font-size: 50px; }
+.bs-bear-hat { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); font-size: 22px; }
+.bs-stats { flex: 1; }
+.bs-name { font-size: 16px; font-weight: 700; color: #1E1B2E; }
+.bs-level { font-size: 12.5px; color: #9A95A8; margin-top: 2px; }
+.bs-exp { height: 6px; background: #F0ECE8; border-radius: 4px; overflow: hidden; margin-top: 9px; }
+.bs-exp-fill { height: 100%; background: linear-gradient(90deg, #B99FE8, #7CC4E8); border-radius: 4px; }
+.bs-energy { text-align: right; flex-shrink: 0; }
+.bs-e-lbl { font-size: 11px; color: #9A95A8; }
+.bs-e-val { font-size: 22px; font-weight: 800; color: #6BC98F; }
+.settings-section { padding: 0 20px; margin-bottom: 16px; }
+.ss-title { font-size: 11.5px; font-weight: 700; color: #9A95A8; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 10px; }
+.ss-list { background: #fff; border-radius: 20px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+.ss-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #F5F1EC;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ss-item:last-child { border-bottom: none; }
+.ss-item:active { background: #F5EFFF; }
+.ss-ico { font-size: 20px; width: 30px; text-align: center; }
+.ss-lbl { flex: 1; font-size: 15px; color: #1E1B2E; }
+.ss-val { font-size: 13px; color: #9A95A8; }
+.ss-arr { font-size: 17px; color: #C8C4D0; }
+.toggle {
+  width: 48px; height: 28px;
+  background: #6BC98F;
+  border-radius: 14px;
+  position: relative;
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px; right: 3px;
+  width: 22px; height: 22px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Animations
+══════════════════════════════════════════════════════════════ */
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.065); }
+}
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+@keyframes shine-slide {
+  0%, 100% { opacity: 0; transform: translateX(-10px); }
+  50% { opacity: 1; transform: translateX(0); }
+}
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-18px); }
+}
+@keyframes happy-jump {
+  0% { transform: scale(0.88); }
+  55% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+@keyframes scan {
+  0%, 100% { top: 8px; opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { top: calc(100% - 10px); opacity: 0; }
+}
+@keyframes ldot {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.35; }
+  40% { transform: scale(1.25); opacity: 1; }
+}
+@keyframes pop-in {
+  from { transform: scale(0.8) translateY(6px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+@keyframes slide-up {
+  from { transform: translateY(22px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+/* Color helpers */
+.blue { color: #7CC4E8; }
+.green { color: #6BC98F; }
+.yellow { color: #F5C842; }
+.red { color: #F07B5A; }
+</style>
+</head>
+<body>
+
+<!-- ─────────────── Sidebar Navigation ─────────────── -->
+<nav class="sidebar">
+  <div class="sidebar-label">原型页面</div>
+  <div class="nav-btn active" id="nb-welcome" onclick="go('welcome')">🌟 欢迎页</div>
+  <div class="nav-btn" id="nb-perm1" onclick="go('perm1')">❤️ 权限·健康</div>
+  <div class="nav-btn" id="nb-perm2" onclick="go('perm2')">📷 权限·相机</div>
+  <div class="nav-btn" id="nb-perm3" onclick="go('perm3')">🔔 权限·通知</div>
+  <div class="nav-btn" id="nb-create" onclick="go('create')">🎨 创建伙伴</div>
+  <div class="nav-sep"></div>
+  <div class="nav-btn" id="nb-home" onclick="go('home')">🏠 首页·伙伴</div>
+  <div class="nav-btn" id="nb-food1" onclick="go('food1')">📸 拍照识别</div>
+  <div class="nav-btn" id="nb-food3" onclick="go('food3')">🍜 识别结果</div>
+  <div class="nav-btn" id="nb-food4" onclick="go('food4')">✨ 喂食反馈</div>
+  <div class="nav-sep"></div>
+  <div class="nav-btn" id="nb-deco" onclick="go('deco')">🎩 装饰馆</div>
+  <div class="nav-btn" id="nb-map" onclick="go('map')">🗺️ 地图探索</div>
+  <div class="nav-btn" id="nb-status" onclick="go('status')">📊 今日状态</div>
+  <div class="nav-btn" id="nb-profile" onclick="go('profile')">👤 我的</div>
+</nav>
+
+<!-- ─────────────── Phone Frame ─────────────── -->
+<div class="phone-wrap">
+<div class="phone">
+
+<!-- ████████████████  WELCOME  ████████████████ -->
+<div class="screen active" id="s-welcome">
+  <div class="sbar"><span class="sbar-time">9:41</span><div class="sbar-icons">●●● 🔋</div></div>
+  <div class="welcome-inner">
+    <div class="app-badge">🐻</div>
+    <div class="app-name">Builder</div>
+    <div class="app-sub">健康伙伴</div>
+    <div class="welcome-bear" onclick="go('perm1')">🐻</div>
+    <div class="welcome-tagline">你将拥有一只小熊伙伴<br>健康习惯会让它更有精神</div>
+    <div class="welcome-dots">
+      <div class="wd"></div><div class="wd"></div><div class="wd active"></div>
+    </div>
+  </div>
+  <div class="welcome-foot">
+    <button class="btn btn-p" onclick="go('perm1')">开始 →</button>
+  </div>
+</div>
+
+<!-- ████████████████  PERM 1 — Health  ████████████████ -->
+<div class="screen perm-screen" id="s-perm1">
+  <div class="sbar"><span class="sbar-time">9:41</span><div class="sbar-icons">●●● 🔋</div></div>
+  <div class="perm-step-bar">
+    <div class="perm-dots">
+      <div class="pd on"></div><div class="pd"></div><div class="pd"></div>
+    </div>
+  </div>
+  <div class="perm-body">
+    <div class="perm-illo">🐻📓</div>
+    <div class="perm-title">读取健康数据</div>
+    <div class="perm-desc">Builder 需要读取你的运动与睡眠数据，用于计算小熊的能量槽与心情状态。</div>
+    <div class="perm-note">🔒 你的数据只在本地运算，绝不上传服务器</div>
+  </div>
+  <div class="perm-foot">
+    <button class="btn btn-p" onclick="go('perm2')">去授权 HealthKit</button>
+    <button class="btn btn-ghost" onclick="go('perm2')">稍后再说</button>
+  </div>
+</div>
+
+<!-- ████████████████  PERM 2 — Camera  ████████████████ -->
+<div class="screen perm-screen" id="s-perm2">
+  <div class="sbar"><span class="sbar-time">9:41</span><div class="sbar-icons">●●● 🔋</div></div>
+  <div class="perm-step-bar">
+    <div class="perm-dots">
+      <div class="pd"></div><div class="pd on"></div><div class="pd"></div>
+    </div>
+  </div>
+  <div class="perm-body">
+    <div class="perm-illo">🐻📸</div>
+    <div class="perm-title">使用相机与相册</div>
+    <div class="perm-desc">拍照识别食物，帮小熊记录每餐，让它知道你吃了什么、补充了多少能量。</div>
+    <div class="perm-note">🖼️ 照片仅用于本次识别，不存储到任何服务器</div>
+  </div>
+  <div class="perm-foot">
+    <button class="btn btn-p" onclick="go('perm3')">去授权相机</button>
+    <button class="btn btn-ghost" onclick="go('perm3')">稍后再说</button>
+  </div>
+</div>
+
+<!-- ████████████████  PERM 3 — Notifications  ████████████████ -->
+<div class="screen perm-screen" id="s-perm3">
+  <div class="sbar"><span class="sbar-time">9:41</span><div class="sbar-icons">●●● 🔋</div></div>
+  <div class="perm-step-bar">
+    <div class="perm-dots">
+      <div class="pd"></div><div class="pd"></div><div class="pd on"></div>
+    </div>
+  </div>
+  <div class="perm-body">
+    <div class="perm-illo">🐻🔔</div>
+    <div class="perm-title">接收提醒通知</div>
+    <div class="perm-desc">让小熊在合适的时机轻轻提醒你——该走走了、该喝水了，或者睡眠时间到啦。</div>
+    <div class="perm-note">⏰ 小熊只在有意义的时候打扰你</div>
+  </div>
+  <div class="perm-foot">
+    <button class="btn btn-p" onclick="go('create')">开启提醒</button>
+    <button class="btn btn-ghost" onclick="go('create')">不需要</button>
+  </div>
+</div>
+
+<!-- ████████████████  CREATE PARTNER  ████████████████ -->
+<div class="screen" id="s-create" style="background: linear-gradient(180deg,#FDF7EE 0%,#F7F5F2 100%);">
+  <div class="sbar"><span class="sbar-time">9:41</span><div class="sbar-icons">●●● 🔋</div></div>
+  <div style="padding: 10px 24px 0;">
+    <div style="font-size:28px;font-weight:800;color:#1E1B2E;line-height:1.25;">为你的伙伴<br>取个名字吧 🐻</div>
+    <div style="font-size:14px;color:#9A95A8;margin-top:6px;">它会陪你一起养成健康习惯</div>
+  </div>
+  <div class="create-bear-preview" id="create-bear">🐻</div>
+  <div class="create-body">
+    <div class="sec-lbl">伙伴名字</div>
+    <input class="inp" type="text" placeholder="默认「小熊」" value="小熊">
+    <div class="sec-lbl">选择外观</div>
+    <div class="skin-row">
+      <div class="skin-opt on" onclick="pickSkin(this,'🐻')">🐻</div>
+      <div class="skin-opt" onclick="pickSkin(this,'🐨')">🐨</div>
+      <div class="skin-opt" onclick="pickSkin(this,'🧸')">🧸</div>
+    </div>
+  </div>
+  <div class="create-foot">
+    <button class="btn btn-p" onclick="go('home')">进入我的伙伴 →</button>
+  </div>
+</div>
+
+<!-- ████████████████  HOME  ████████████████ -->
+<div class="screen" id="s-home" style="background:linear-gradient(180deg,#E5F2FF 0%,#EEE6FF 42%,#FDF7EE 100%);">
+  <div class="sbar" style="position:relative;z-index:30;"><span class="sbar-time">9:41</span><div class="sbar-icons">●●● 🔋</div></div>
+  <div class="home-topbar">
+    <div class="loc-pill">📍 青青草原</div>
+    <div class="wx-pill">☀️ 22°C 晴</div>
+  </div>
+
+  <div class="bear-stage">
+    <div class="bear-glow"></div>
+    <div class="bear-main" id="home-bear-emo" onclick="toggleDialog()">🐻</div>
+    <div class="bear-mood-badge">😊 状态：开心</div>
+    <div class="dialog-bubble" id="dialog-bubble">
+      今天能量还不错！<br>去走走步会更好哦 🌿
+      <div class="dialog-cta">💡 点击查看今日建议</div>
+    </div>
+  </div>
+
+  <div class="energy-wrap">
+    <div class="card energy-card" onclick="go('status')" style="cursor:pointer;">
+      <div class="energy-row1">
+        <div class="energy-lbl">⚡ 能量槽</div>
+        <div class="energy-num">72 <span>/ 100</span></div>
+      </div>
+      <div class="ebar-track">
+        <div class="ebar-fill" style="width:72%;">
+          <div class="ebar-shine"></div>
+        </div>
+      </div>
+      <div class="energy-feedback">状态不错，保持下去 💛 — 点击查看详情</div>
+    </div>
+  </div>
+
+  <div class="actions-wrap">
+    <div class="section-head">今日行动</div>
+    <div class="act-cards">
+      <div class="act-card" onclick="go('status')">
+        <div class="act-ico-wrap ico-green">🏃</div>
+        <div class="act-info">
+          <div class="act-name">走一走</div>
+          <div class="pbar-track"><div class="pbar-fill" style="width:60%;"></div></div>
+          <div class="act-sub">今日 6,024 步，目标 10,000</div>
+        </div>
+        <div class="act-end">→</div>
+      </div>
+      <div class="act-card" onclick="go('status')">
+        <div class="act-ico-wrap ico-blue">🌙</div>
+        <div class="act-info">
+          <div class="act-name">睡得好</div>
+          <div style="display:flex;gap:3px;font-size:15px;margin-top:4px;">⭐⭐⭐⭐☆</div>
+          <div class="act-sub">昨晚 7.5 小时 · 不错</div>
+        </div>
+        <div class="act-end done">✓</div>
+      </div>
+      <div class="act-card" onclick="go('food1')">
+        <div class="act-ico-wrap ico-orange">🍎</div>
+        <div class="act-info">
+          <div class="act-name">喂喂我</div>
+          <div class="pbar-track"><div class="pbar-fill" style="width:0%;background:linear-gradient(90deg,#F5C842,#F0A030);"></div></div>
+          <div class="act-sub">还没有记录今日饮食 · 拍照喂我</div>
+        </div>
+        <div class="act-end cta">📷</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bnav">
+    <div class="bnav-item on"><div class="bnav-icon">🏠</div><div class="bnav-lbl">伙伴</div></div>
+    <div class="bnav-item" onclick="go('food1')"><div class="bnav-icon">📷</div><div class="bnav-lbl">记录</div></div>
+    <div class="bnav-item" onclick="go('map')"><div class="bnav-icon">🗺️</div><div class="bnav-lbl">探索</div></div>
+    <div class="bnav-item" onclick="go('profile')"><div class="bnav-icon">👤</div><div class="bnav-lbl">我的</div></div>
+  </div>
+</div>
+
+<!-- ████████████████  FOOD CAMERA  ████████████████ -->
+<div class="screen" id="s-food1" style="background:#101020;">
+  <div class="sbar" style="color:#fff;"><span class="sbar-time" style="color:#fff;">9:41</span><div class="sbar-icons" style="color:#fff;">●●● 🔋</div></div>
+  <div class="cam-top-bar">
+    <button class="back" style="background:rgba(255,255,255,0.14);" onclick="go('home')"><span style="color:#fff;">←</span></button>
+    <span style="font-size:18px;font-weight:700;color:#fff;">拍照识别</span>
+  </div>
+  <div class="cam-vf">
+    <div class="cam-frame">
+      <div class="cc cc-tl"></div><div class="cc cc-tr"></div>
+      <div class="cc cc-bl"></div><div class="cc cc-br"></div>
+      <div class="cam-scan-line"></div>
+    </div>
+    <div class="cam-hint-bear">🐻🔍 将食物放入框内，小熊帮你识别</div>
+  </div>
+  <div style="padding:0 24px 12px;display:flex;justify-content:center;gap:16px;">
+    <div style="background:rgba(255,255,255,0.08);border-radius:14px;padding:7px 16px;font-size:13px;color:rgba(255,255,255,0.6);">拍照</div>
+    <div style="background:rgba(255,255,255,0.22);border-radius:14px;padding:7px 16px;font-size:13px;color:#fff;font-weight:600;border-bottom:2px solid #fff;">相册</div>
+  </div>
+  <div class="cam-ctrls">
+    <div class="cam-btn-side" onclick="go('food2')">🖼️</div>
+    <div class="cam-btn-cap" onclick="go('food2')">📷</div>
+    <div class="cam-btn-side" style="opacity:0.45;">⚡</div>
+  </div>
+</div>
+
+<!-- ████████████████  FOOD LOADING  ████████████████ -->
+<div class="screen" id="s-food2" style="background:linear-gradient(180deg,#FDF6EC 0%,#F3EEFF 100%);">
+  <div class="sbar"><span class="sbar-time">9:41</span><div class="sbar-icons">●●● 🔋</div></div>
+  <div class="load-body">
+    <div class="load-bear">🐻🔍</div>
+    <div class="load-title">小熊正在识别…</div>
+    <div class="load-sub">分析食物成分与热量</div>
+    <div class="load-dots">
+      <div class="ld"></div><div class="ld"></div><div class="ld"></div>
+    </div>
+    <div style="margin-top:36px;font-size:13px;color:#C0BAD0;text-align:center;"></div>
+  </div>
+</div>
+
+<!-- ████████████████  FOOD RESULTS  ████████████████ -->
+<div class="screen" id="s-food3">
+  <div class="food-hero">
+    <button class="food-hero-back" onclick="go('food1')">←</button>
+    🍜
+  </div>
+  <div class="result-sheet" id="result-sheet">
+    <div class="rs-title">识别结果</div>
+    <div class="rs-sub">选择一个喂给小熊 🐻</div>
+    <div class="food-item on" id="fi1" onclick="selFood('fi1')">
+      <div class="fi-emoji">🍜</div>
+      <div class="fi-info">
+        <div class="fi-name">番茄蛋花汤面</div>
+        <div class="fi-cal">约 420 kcal · 碳水 65g · 蛋白 14g</div>
+      </div>
+      <div class="fi-stars">
+        <span class="star f">★</span><span class="star f">★</span><span class="star f">★</span>
+        <span class="star f">★</span><span class="star f">★</span>
+      </div>
+    </div>
+    <div class="food-item" id="fi2" onclick="selFood('fi2')">
+      <div class="fi-emoji">🍝</div>
+      <div class="fi-info">
+        <div class="fi-name">素炒面</div>
+        <div class="fi-cal">约 380 kcal · 碳水 58g · 蛋白 9g</div>
+      </div>
+      <div class="fi-stars">
+        <span class="star f">★</span><span class="star f">★</span><span class="star f">★</span>
+        <span class="star f">★</span><span class="star e">★</span>
+      </div>
+    </div>
+    <div class="food-item" id="fi3" onclick="selFood('fi3')">
+      <div class="fi-emoji">🍲</div>
+      <div class="fi-info">
+        <div class="fi-name">其他面食</div>
+        <div class="fi-cal">约 350 kcal · 碳水 52g · 蛋白 8g</div>
+      </div>
+      <div class="fi-stars">
+        <span class="star f">★</span><span class="star f">★</span><span class="star f">★</span>
+        <span class="star e">★</span><span class="star e">★</span>
+      </div>
+    </div>
+    <div class="food-actions">
+      <button class="btn btn-g" onclick="go('food4')">🐻 喂给小熊！</button>
+      <div class="food-manual" onclick="go('home')">✏️ 没识别对？手动搜索</div>
+    </div>
+  </div>
+</div>
+
+<!-- ████████████████  FEED RESULT  ████████████████ -->
+<div class="screen" id="s-food4" style="background:linear-gradient(180deg,#E5FFF1 0%,#F3EEFF 100%);">
+  <div class="sbar"><span class="sbar-time">9:41</span><div class="sbar-icons">●●● 🔋</div></div>
+  <div class="feed-result">
+    <div class="feed-bear">🐻</div>
+    <div class="energy-badge">
+      <div class="eb-plus">⚡ +12</div>
+      <div class="eb-lbl">能量值已补充</div>
+    </div>
+    <div class="feed-quote">"好香！我感觉更有力气了～<br>谢谢你喂我！🌟"</div>
+    <div class="mini-ebar">
+      <div class="me-row"><span class="me-lbl">⚡ 能量槽</span><span class="me-val">84 / 100</span></div>
+      <div class="me-track"><div class="me-fill" style="width:84%;"></div></div>
+    </div>
+  </div>
+  <div class="feed-foot">
+    <button class="btn btn-g" onclick="go('home')">回到首页 🏠</button>
+  </div>
+</div>
+
+<!-- ████████████████  DECORATION SHOP  ████████████████ -->
+<div class="screen" id="s-deco">
+  <div class="sbar"><span class="sbar-time">9:41</span><div class="sbar-icons">●●● 🔋</div></div>
+  <div class="deco-header">
+    <div class="ph" style="padding:0 0 0 0;">
+      <button class="back" onclick="go('profile')">←</button>
+      <span class="ph-title">装饰馆</span>
+    </div>
+    <div class="deco-preview-row">
+      <div class="dp-bear"><span>🐻</span><span class="dp-hat" id="dp-hat">🎩</span></div>
+      <div class="dp-info">
+        <div class="dp-name" id="dp-name">帅气绅士帽</div>
+        <div class="dp-sub">当前穿戴 · Lv.3 解锁</div>
+        <div class="dp-change">更换外观 →</div>
+      </div>
+    </div>
+  </div>
+  <div class="deco-tabs">
+    <div class="dtab on">全部</div>
+    <div class="dtab">头饰</div>
+    <div class="dtab">配饰</div>
+    <div class="dtab">背包</div>
+    <div class="dtab">主题</div>
+  </div>
+  <div class="sc">
+    <div class="deco-grid">
+      <div class="deco-card on" id="dc-1" onclick="wearDeco(this,'🎩','帅气绅士帽')">
+        <div class="dco-emo">🎩</div>
+        <div class="dco-name">绅士帽</div>
+        <div class="dco-status wearing">穿戴中</div>
+      </div>
+      <div class="deco-card" id="dc-2" onclick="wearDeco(this,'🌈','彩虹发带')">
+        <div class="dco-emo">🌈</div>
+        <div class="dco-name">彩虹发带</div>
+        <div class="dco-status">Lv.2</div>
+      </div>
+      <div class="deco-card locked">
+        <div class="dco-lock">🔒</div>
+        <div class="dco-emo" style="filter:grayscale(1);opacity:0.5;">👑</div>
+        <div class="dco-name">金色皇冠</div>
+        <div class="dco-lock-cond">Lv.5 解锁</div>
+      </div>
+      <div class="deco-card" id="dc-4" onclick="wearDeco(this,'🕶️','酷炫墨镜')">
+        <div class="dco-emo">🕶️</div>
+        <div class="dco-name">酷炫墨镜</div>
+        <div class="dco-status">Lv.2</div>
+      </div>
+      <div class="deco-card locked">
+        <div class="dco-lock">🔒</div>
+        <div class="dco-emo" style="filter:grayscale(1);opacity:0.5;">🎀</div>
+        <div class="dco-name">粉色蝴蝶结</div>
+        <div class="dco-lock-cond">连续 7 天</div>
+      </div>
+      <div class="deco-card locked">
+        <div class="dco-lock">🔒</div>
+        <div class="dco-emo" style="filter:grayscale(1);opacity:0.5;">🎓</div>
+        <div class="dco-name">学士帽</div>
+        <div class="dco-lock-cond">Lv.8 解锁</div>
+      </div>
+      <div class="deco-card" id="dc-7" onclick="wearDeco(this,'🎒','探险背包')">
+        <div class="dco-emo">🎒</div>
+        <div class="dco-name">探险背包</div>
+        <div class="dco-status">Lv.3</div>
+      </div>
+      <div class="deco-card locked">
+        <div class="dco-lock">🔒</div>
+        <div class="dco-emo" style="filter:grayscale(1);opacity:0.5;">🌟</div>
+        <div class="dco-name">星星头环</div>
+        <div class="dco-lock-cond">10 次饮食记录</div>
+      </div>
+      <div class="deco-card" id="dc-9" onclick="wearDeco(this,'🎵','音乐耳机')">
+        <div class="dco-emo">🎵</div>
+        <div class="dco-name">音乐耳机</div>
+        <div class="dco-status">Lv.4</div>
+      </div>
+    </div>
+  </div>
+  <div class="bnav">
+    <div class="bnav-item" onclick="go('home')"><div class="bnav-icon">🏠</div><div class="bnav-lbl">伙伴</div></div>
+    <div class="bnav-item" onclick="go('food1')"><div class="bnav-icon">📷</div><div class="bnav-lbl">记录</div></div>
+    <div class="bnav-item" onclick="go('map')"><div class="bnav-icon">🗺️</div><div class="bnav-lbl">探索</div></div>
+    <div class="bnav-item on"><div class="bnav-icon">👤</div><div class="bnav-lbl">我的</div></div>
+  </div>
+</div>
+
+<!-- ████████████████  MAP  ████████████████ -->
+<div class="screen" id="s-map">
+  <div class="sbar"><span class="sbar-time">9:41</span><div class="sbar-icons">●●● 🔋</div></div>
+  <div class="map-head">
+    <div class="map-title">探索地图</div>
+    <div class="map-sub">解锁新场景，和小熊一起冒险</div>
+  </div>
+  <div class="sc">
+    <div class="map-cards">
+
+      <!-- Map 1: Current -->
+      <div class="map-card" style="background:linear-gradient(135deg,#5CB87A,#9EDFB4);">
+        <div class="mc-bg">🌿🌱🌲</div>
+        <div class="mc-overlay"></div>
+        <div class="mc-badge curr">📍 正在这里</div>
+        <div class="mc-content">
+          <div class="mc-name">青青草原</div>
+          <div class="mc-desc">探索进度 65% · 每日步数可推进</div>
+          <div class="mc-progress"><div class="mc-progress-fill" style="width:65%;"></div></div>
+        </div>
+      </div>
+
+      <!-- Map 2: Unlocked -->
+      <div class="map-card" style="background:linear-gradient(135deg,#5AADE0,#94D4F5);">
+        <div class="mc-bg">🏞️🌊🐟</div>
+        <div class="mc-overlay"></div>
+        <div class="mc-badge">✅ 已解锁</div>
+        <div class="mc-content">
+          <div class="mc-name">清澈溪谷</div>
+          <div class="mc-desc">解锁了「溪流主题帽」· 前往探索</div>
+          <div class="mc-progress"><div class="mc-progress-fill" style="width:30%;"></div></div>
+        </div>
+      </div>
+
+      <!-- Map 3: Locked -->
+      <div class="map-card" style="background:linear-gradient(135deg,#E8A038,#F5C850);">
+        <div class="mc-bg">🌄🏜️🌵</div>
+        <div class="mc-overlay"></div>
+        <div class="mc-badge">🔒 未解锁</div>
+        <div class="mc-locked-overlay">
+          <div style="font-size:32px;">🔒</div>
+          <div style="font-size:15px;font-weight:700;">达到 Lv.5 解锁</div>
+          <div style="font-size:12px;opacity:0.75;">当前 Lv.3 · 还差 2 级</div>
+        </div>
+        <div class="mc-content">
+          <div class="mc-name">金色沙漠</div>
+          <div class="mc-desc">神秘绿洲，只有勤奋的伙伴才能到达</div>
+        </div>
+      </div>
+
+      <!-- Map 4: Locked -->
+      <div class="map-card" style="background:linear-gradient(135deg,#3A3880,#7A5AAA);">
+        <div class="mc-bg">🌃🌌✨</div>
+        <div class="mc-overlay"></div>
+        <div class="mc-badge">🔒 未解锁</div>
+        <div class="mc-locked-overlay">
+          <div style="font-size:32px;">🔒</div>
+          <div style="font-size:15px;font-weight:700;">累计跑步 50km</div>
+          <div style="font-size:12px;opacity:0.75;">已跑 18km · 还差 32km</div>
+        </div>
+        <div class="mc-content">
+          <div class="mc-name">星空秘境</div>
+          <div class="mc-desc">在璀璨星空下与小熊共舞</div>
+        </div>
+      </div>
+      <div style="height:8px;"></div>
+    </div>
+  </div>
+  <div class="bnav">
+    <div class="bnav-item" onclick="go('home')"><div class="bnav-icon">🏠</div><div class="bnav-lbl">伙伴</div></div>
+    <div class="bnav-item" onclick="go('food1')"><div class="bnav-icon">📷</div><div class="bnav-lbl">记录</div></div>
+    <div class="bnav-item on"><div class="bnav-icon">🗺️</div><div class="bnav-lbl">探索</div></div>
+    <div class="bnav-item" onclick="go('profile')"><div class="bnav-icon">👤</div><div class="bnav-lbl">我的</div></div>
+  </div>
+</div>
+
+<!-- ████████████████  TODAY'S STATUS  ████████████████ -->
+<div class="screen" id="s-status">
+  <div class="sbar"><span class="sbar-time">9:41</span><div class="sbar-icons">●●● 🔋</div></div>
+  <div class="ph"><button class="back" onclick="go('home')">←</button><span class="ph-title">今日状态</span></div>
+  <div class="stat-head" style="padding-top:12px;">
+    <div style="font-size:13px;color:#9A95A8;">2026年3月30日 · 周一</div>
+  </div>
+  <div class="sc">
+    <!-- Three rings -->
+    <div class="card rings-card">
+      <div style="text-align:center;font-size:14px;font-weight:700;color:#1E1B2E;margin-bottom:20px;">今日能量来源</div>
+      <div class="rings-row">
+        <div class="ring-item">
+          <div class="ring-wrap">
+            <svg width="68" height="68" viewBox="0 0 68 68">
+              <circle cx="34" cy="34" r="27" fill="none" stroke="#F0ECE8" stroke-width="7"/>
+              <circle cx="34" cy="34" r="27" fill="none" stroke="#7CC4E8" stroke-width="7"
+                stroke-dasharray="170" stroke-dashoffset="42" stroke-linecap="round"
+                transform="rotate(-90 34 34)"/>
+            </svg>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:20px;">🌙</div>
+          </div>
+          <div class="ring-lbl">睡眠</div>
+          <div class="ring-val blue">75%</div>
+        </div>
+        <div class="ring-item">
+          <div class="ring-wrap">
+            <svg width="68" height="68" viewBox="0 0 68 68">
+              <circle cx="34" cy="34" r="27" fill="none" stroke="#F0ECE8" stroke-width="7"/>
+              <circle cx="34" cy="34" r="27" fill="none" stroke="#6BC98F" stroke-width="7"
+                stroke-dasharray="170" stroke-dashoffset="68" stroke-linecap="round"
+                transform="rotate(-90 34 34)"/>
+            </svg>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:20px;">🏃</div>
+          </div>
+          <div class="ring-lbl">运动</div>
+          <div class="ring-val green">60%</div>
+        </div>
+        <div class="ring-item">
+          <div class="ring-wrap">
+            <svg width="68" height="68" viewBox="0 0 68 68">
+              <circle cx="34" cy="34" r="27" fill="none" stroke="#F0ECE8" stroke-width="7"/>
+              <circle cx="34" cy="34" r="27" fill="none" stroke="#F5C842" stroke-width="7"
+                stroke-dasharray="170" stroke-dashoffset="128" stroke-linecap="round"
+                transform="rotate(-90 34 34)"/>
+            </svg>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:20px;">🍎</div>
+          </div>
+          <div class="ring-lbl">饮食</div>
+          <div class="ring-val yellow">25%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bear message -->
+    <div class="bear-msg">
+      <div class="bm-icon">🐻</div>
+      <div class="bm-text">
+        <div class="bm-bold">睡眠不错，运动稍少</div>
+        昨晚睡得挺好，今天步数还差一点，饮食还没有记录哦～快去补充能量吧！
+      </div>
+    </div>
+
+    <!-- Suggestions -->
+    <div class="sugg-title">今日建议</div>
+    <div class="sugg-cards">
+      <div class="sugg-card">
+        <div class="sugg-ico">🚶</div>
+        <div class="sugg-txt">散步 10 分钟，让小熊也动起来</div>
+        <div class="sugg-reward">⚡ +10</div>
+      </div>
+      <div class="sugg-card">
+        <div class="sugg-ico">📸</div>
+        <div class="sugg-txt">记录今日饮食，小熊在等着吃饭</div>
+        <div class="sugg-reward">⚡ +12</div>
+      </div>
+    </div>
+
+    <!-- Streak -->
+    <div class="streak-card">
+      <div class="str-row">
+        <div class="str-lbl">🔥 连续打卡</div>
+        <div class="str-num">5 天</div>
+      </div>
+      <div class="str-dots">
+        <div class="sdot done">✓</div>
+        <div class="sdot done">✓</div>
+        <div class="sdot done">✓</div>
+        <div class="sdot done">✓</div>
+        <div class="sdot done">✓</div>
+        <div class="sdot today">今</div>
+        <div class="sdot empty"></div>
+      </div>
+    </div>
+    <div style="height:20px;"></div>
+  </div>
+</div>
+
+<!-- ████████████████  PROFILE  ████████████████ -->
+<div class="screen" id="s-profile">
+  <div class="sbar" style="position:absolute;top:0;left:0;right:0;z-index:30;">
+    <span class="sbar-time" style="color:#fff;">9:41</span>
+    <div class="sbar-icons" style="color:#fff;">●●● 🔋</div>
+  </div>
+  <div class="profile-hero">
+    <div class="p-avatar">🐻</div>
+    <div>
+      <div class="p-name">Bob</div>
+      <div class="p-days">和小熊相识 15 天 · Lv.3</div>
+    </div>
+  </div>
+  <div class="sc">
+    <!-- Bear stat -->
+    <div class="card bear-stat-card">
+      <div class="bs-bear">
+        <span class="bs-bear-emo">🐻</span>
+        <span class="bs-bear-hat">🎩</span>
+      </div>
+      <div class="bs-stats">
+        <div class="bs-name">小熊 · Lv.3</div>
+        <div class="bs-level">经验值 650 / 1000</div>
+        <div class="bs-exp"><div class="bs-exp-fill" style="width:65%;"></div></div>
+      </div>
+      <div class="bs-energy">
+        <div class="bs-e-lbl">能量</div>
+        <div class="bs-e-val">72</div>
+      </div>
+    </div>
+
+    <!-- Authorization -->
+    <div class="settings-section">
+      <div class="ss-title">授权管理</div>
+      <div class="ss-list">
+        <div class="ss-item"><div class="ss-ico">❤️</div><div class="ss-lbl">健康数据 HealthKit</div><div class="toggle"></div></div>
+        <div class="ss-item"><div class="ss-ico">📷</div><div class="ss-lbl">相机与相册</div><div class="toggle"></div></div>
+        <div class="ss-item"><div class="ss-ico">🔔</div><div class="ss-lbl">通知提醒</div><div class="toggle"></div></div>
+      </div>
+    </div>
+
+    <!-- Partner -->
+    <div class="settings-section">
+      <div class="ss-title">小熊</div>
+      <div class="ss-list">
+        <div class="ss-item" onclick="go('deco')">
+          <div class="ss-ico">🎒</div><div class="ss-lbl">装饰仓库</div>
+          <div class="ss-val">9 件</div><div class="ss-arr">›</div>
+        </div>
+        <div class="ss-item">
+          <div class="ss-ico">🏆</div><div class="ss-lbl">成就徽章</div>
+          <div class="ss-val">3 个</div><div class="ss-arr">›</div>
+        </div>
+        <div class="ss-item" onclick="go('map')">
+          <div class="ss-ico">🗺️</div><div class="ss-lbl">地图探索</div>
+          <div class="ss-val">2 / 4</div><div class="ss-arr">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="settings-section">
+      <div class="ss-title">设置</div>
+      <div class="ss-list">
+        <div class="ss-item"><div class="ss-ico">🎯</div><div class="ss-lbl">目标设置</div><div class="ss-arr">›</div></div>
+        <div class="ss-item"><div class="ss-ico">🔒</div><div class="ss-lbl">数据与隐私</div><div class="ss-arr">›</div></div>
+        <div class="ss-item"><div class="ss-ico">💬</div><div class="ss-lbl">意见反馈</div><div class="ss-arr">›</div></div>
+        <div class="ss-item"><div class="ss-ico">ℹ️</div><div class="ss-lbl">关于 Builder</div><div class="ss-val">v0.1.0</div><div class="ss-arr">›</div></div>
+      </div>
+    </div>
+    <div style="height:20px;"></div>
+  </div>
+  <div class="bnav">
+    <div class="bnav-item" onclick="go('home')"><div class="bnav-icon">🏠</div><div class="bnav-lbl">伙伴</div></div>
+    <div class="bnav-item" onclick="go('food1')"><div class="bnav-icon">📷</div><div class="bnav-lbl">记录</div></div>
+    <div class="bnav-item" onclick="go('map')"><div class="bnav-icon">🗺️</div><div class="bnav-lbl">探索</div></div>
+    <div class="bnav-item on"><div class="bnav-icon">👤</div><div class="bnav-lbl">我的</div></div>
+  </div>
+</div>
+
+</div><!-- /phone -->
+</div><!-- /phone-wrap -->
+
+<script>
+// ──────────────── Navigation ────────────────
+let loadTimer = null;
+
+function go(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const t = document.getElementById('s-' + id);
+  if (t) t.classList.add('active');
+
+  // Update sidebar
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const nb = document.getElementById('nb-' + id);
+  if (nb) nb.classList.add('active');
+
+  // Auto-advance loading screen
+  if (id === 'food2') {
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(() => go('food3'), 2200);
+  }
+  // Reset dialog on home
+  if (id === 'home') {
+    const d = document.getElementById('dialog-bubble');
+    if (d) d.style.display = 'none';
+  }
+}
+
+// ──────────────── Bear dialog ────────────────
+function toggleDialog() {
+  const d = document.getElementById('dialog-bubble');
+  d.style.display = d.style.display === 'block' ? 'none' : 'block';
+}
+
+// ──────────────── Skin picker ────────────────
+function pickSkin(el, emoji) {
+  document.querySelectorAll('.skin-opt').forEach(s => s.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('create-bear').textContent = emoji;
+}
+
+// ──────────────── Food selection ────────────────
+function selFood(id) {
+  ['fi1','fi2','fi3'].forEach(fid => {
+    const el = document.getElementById(fid);
+    if (el) { el.classList.remove('selected'); el.style.background = ''; }
+  });
+  const sel = document.getElementById(id);
+  if (sel) sel.classList.add('selected');
+}
+
+// ──────────────── Decoration ────────────────
+function wearDeco(el, emoji, name) {
+  document.querySelectorAll('.deco-card').forEach(c => {
+    c.classList.remove('on');
+    const s = c.querySelector('.dco-status');
+    if (s && s.textContent === '穿戴中') {
+      s.textContent = '已解锁';
+      s.className = 'dco-status';
+    }
+  });
+  el.classList.add('on');
+  const s = el.querySelector('.dco-status');
+  if (s) { s.textContent = '穿戴中'; s.className = 'dco-status wearing'; }
+  // Update preview
+  document.getElementById('dp-hat').textContent = emoji;
+  document.getElementById('dp-name').textContent = name;
+}
+
+// ──────────────── Deco tab highlighting ────────────────
+document.querySelectorAll('.dtab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.dtab').forEach(t => t.classList.remove('on'));
+    this.classList.add('on');
+  });
+});
+
+// ──────────────── Init ────────────────
+go('welcome');
+</script>
+</body>
+</html>
