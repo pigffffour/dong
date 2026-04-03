@@ -9,47 +9,52 @@ final class BuilderAppState: ObservableObject {
         case perm3
         case create
     }
-    
+
     enum Tab: Hashable {
         case buddy
         case record
         case explore
         case profile
     }
-    
+
+    enum Route: Hashable {
+        case foodLoading
+        case foodResults
+        case feedResult
+    }
+
     @Published var onboardingStep: OnboardingStep = .welcome
     @Published var onboardingCompleted: Bool {
         didSet { UserDefaults.standard.set(onboardingCompleted, forKey: "onboardingCompleted") }
     }
-    
+
     @Published var selectedTab: Tab = .buddy
     @Published var buddy: Buddy = Buddy()
     @Published var selectedFoodEnergyBonus: Int = 12
-    @Published var showFoodLoading: Bool = false
-    @Published var showFoodResults: Bool = false
-    @Published var showFeedResult: Bool = false
-    
+    @Published var navigationPath = NavigationPath()
+
     init() {
         self.onboardingCompleted = UserDefaults.standard.bool(forKey: "onboardingCompleted")
     }
-    
+
     /// 从持久化数据恢复伙伴状态
     func restoreBuddy(from persistence: PersistenceServiceProtocol) {
         if let data = try? persistence.loadBuddy() {
             self.buddy = Buddy(from: data)
         }
     }
-    
+
     /// 保存伙伴状态
     func saveBuddy(to persistence: PersistenceServiceProtocol) {
         try? persistence.saveBuddy(buddy.toBuddyData())
     }
-    
+
     func resetToWelcome() {
         onboardingStep = .welcome
         onboardingCompleted = false
         selectedTab = .buddy
         buddy = Buddy()
+        navigationPath = NavigationPath()
     }
 }
 
@@ -58,9 +63,9 @@ struct BuilderRootView: View {
     @EnvironmentObject private var authService: AuthService
     @StateObject private var appState = BuilderAppState()
     @State private var bodyDataComplete = false
-    
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $appState.navigationPath) {
             Group {
                 if !authService.isLoggedIn {
                     // 未登录 → 手机号登录
@@ -77,6 +82,16 @@ struct BuilderRootView: View {
                 }
             }
             .navigationBarHidden(true)
+            .navigationDestination(for: BuilderAppState.Route.self) { route in
+                switch route {
+                case .foodLoading:
+                    BuilderFoodLoadingScreen()
+                case .foodResults:
+                    BuilderFoodResultsScreen()
+                case .feedResult:
+                    BuilderFeedResultScreen()
+                }
+            }
         }
         .environmentObject(appState)
         .environmentObject(deps.authService)

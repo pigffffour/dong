@@ -549,7 +549,7 @@ struct BuilderFoodCameraScreen: View {
                 .frame(maxHeight: .infinity)
                 
                 HStack(spacing: 28) {
-                    Button { appState.showFoodLoading = true } label: {
+                    Button { appState.navigationPath.append(BuilderAppState.Route.foodLoading) } label: {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.white.opacity(0.12))
                             .frame(width: 56, height: 56)
@@ -557,7 +557,7 @@ struct BuilderFoodCameraScreen: View {
                     }
                     .buttonStyle(.plain)
                     
-                    Button { appState.showFoodLoading = true } label: {
+                    Button { appState.navigationPath.append(BuilderAppState.Route.foodLoading) } label: {
                         Circle()
                             .fill(Color.white.opacity(0.95))
                             .overlay(Circle().stroke(Color.white.opacity(0.5), lineWidth: 4))
@@ -576,9 +576,6 @@ struct BuilderFoodCameraScreen: View {
                 .padding(.bottom, 110)
             }
             
-        }
-        .navigationDestination(isPresented: $appState.showFoodLoading) {
-            BuilderFoodLoadingScreen()
         }
     }
 }
@@ -615,21 +612,17 @@ struct BuilderFoodLoadingScreen: View {
             }
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
-                    appState.showFoodResults = true
+                    appState.navigationPath.append(BuilderAppState.Route.foodResults)
                 }
             }
             
         }
         .navigationBarBackButtonHidden(true)
-        .navigationDestination(isPresented: $appState.showFoodResults) {
-            BuilderFoodResultsScreen()
-        }
     }
 }
 
 struct BuilderFoodResultsScreen: View {
     @EnvironmentObject private var appState: BuilderAppState
-    @Environment(\.dismiss) private var dismiss
     @State private var selected: Int = 0
     
     private let foods: [BuilderFood] = [
@@ -649,7 +642,7 @@ struct BuilderFoodResultsScreen: View {
                         .overlay(Text("🍜").font(.system(size: 80)))
                     
                     Button {
-                        dismiss()
+                        appState.navigationPath.removeLast(2)
                     } label: {
                         ZStack {
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -693,7 +686,7 @@ struct BuilderFoodResultsScreen: View {
                     VStack(spacing: 10) {
                         Button {
                             appState.selectedFoodEnergyBonus = foods[selected].energyBonus
-                            appState.showFeedResult = true
+                            appState.navigationPath.append(BuilderAppState.Route.feedResult)
                         } label: {
                             Text("🐻 喂给小熊！")
                                 .frame(maxWidth: .infinity)
@@ -723,9 +716,6 @@ struct BuilderFoodResultsScreen: View {
             
         }
         .navigationBarBackButtonHidden(true)
-        .navigationDestination(isPresented: $appState.showFeedResult) {
-            BuilderFeedResultScreen()
-        }
     }
 }
 
@@ -773,9 +763,7 @@ struct BuilderFeedResultScreen: View {
                 Spacer()
 
                 Button {
-                    appState.showFeedResult = false
-                    appState.showFoodResults = false
-                    appState.showFoodLoading = false
+                    appState.navigationPath = NavigationPath()
                     appState.selectedTab = .buddy
                 } label: {
                     Text("回到首页 🏠")
